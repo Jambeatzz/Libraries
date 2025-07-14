@@ -3,6 +3,42 @@ import numpy as np
 import pandas
 
 
+def print_results_pretty(results_dict):
+    """
+    Nimmt das Ergebnis-Dictionary von Rohrreaktor und druckt es in einem leserlichen,
+    strukturierten Format aus.
+    """
+    print("\n--- AUSWERTUNG DER REAKTORENDATEN ---")
+
+    # Abschnitt 1: Die einzelnen Kennzahlen
+    print("\nKENNGRÖSSEN DES REAKTORS:")
+    print("-----------------------------------------")
+    for key, value in results_dict.items():
+        if not isinstance(value, list):  # Nur Werte drucken, die keine Listen sind
+            # Formatierung für eine saubere, linksbündige Ausrichtung der Bezeichner
+            print(f"{key:<38}: {value:.5f}")
+
+    # Abschnitt 2: Die zeitabhängigen Datenlisten
+    print("\n\nZEITABHÄNGIGE DATEN (MESSKURVE):")
+    print("-----------------------------------------")
+
+    t_list = results_dict.get("Zeitachse t [min]", [])
+    c_t_list = results_dict.get("Konzentrationskurve c(t) [mol/L]", [])
+
+    # Spaltenüberschriften für die Tabelle
+    print(f"{'Zeit [min]':<15} | {'c(t) [mol/L]':<20}")
+    print("-----------------------------------------")
+
+    # Daten Zeile für Zeile als Tabelle ausgeben
+    if t_list and c_t_list:
+        for t_val, c_val in zip(t_list, c_t_list):
+            print(f"{t_val:<15.2f} | {c_val:<20.6f}")
+    else:
+        print("Keine Listendaten zum Anzeigen gefunden.")
+
+    print("\n--- ENDE DER AUSWERTUNG ---")
+
+
 ## numerische integration
 def nIntegration(datax, datay):
     """
@@ -58,6 +94,68 @@ def plotshow(
     ylabel=None,
     filepath=None,
     show=True,
+    marker=None,
+    linestyle="-",
+):
+    """
+    Erstellt und zeigt einen flexiblen Plot mit optionalen Konfigurationen.
+
+    Args:
+        datax (list): Eine Liste mit den Daten für die x-Achse.
+        datay (list): Eine Liste mit den Daten für die y-Achse.
+        title (str, optional): Überschrift für das Diagramm.
+        label (str, optional): Die Beschriftung für die Datenreihe. Standard ist None.
+        grid (bool, optional): Ob ein Gitter angezeigt werden soll. Standard ist True.
+        xlabel (str, optional): Die Beschriftung für die x-Achse. Standard ist None.
+        ylabel (str, optional): Die Beschriftung für die y-Achse. Standard ist None.
+        filepath (str, optional): Der Dateipfad zum Speichern (nur der Ordner).
+        show (bool, optional): Ob der Plot direkt angezeigt werden soll. Standard ist True.
+        marker (str, optional): Der Stil des Markers (z.B. 'o', 'x', 's').
+                                Standard ist None (kein Marker).
+        linestyle (str, optional): Der Stil der Linie (z.B. '-', '--', ':').
+                                   'None' für keine Linie. Standard ist '-' (durchgezogene Linie).
+    """
+
+    plt.figure(figsize=(10, 6))
+    plt.grid(grid)
+
+    # 1. Verbessert: X- und Y-Achsen werden in der üblichen Reihenfolge geplottet.
+    # 2. Verbessert: Die neuen Parameter marker und linestyle werden übergeben.
+    # 3. Korrigiert: Das 'label' wird korrekt als Keyword-Argument übergeben.
+    plt.plot(datax, datay, label=label, marker=marker, linestyle=linestyle)
+
+    if title:
+        plt.title(title)
+    if ylabel:
+        plt.ylabel(ylabel)
+    if xlabel:
+        plt.xlabel(xlabel)
+
+    # Eine Legende wird nur angezeigt, wenn ein Label vorhanden ist.
+    if label:
+        plt.legend()
+
+    if filepath and title:
+        # Erstellt einen sicheren Dateinamen aus dem Titel
+        sicherer_titel = "".join(
+            c for c in title if c.isalnum() or c in (" ", "_")
+        ).rstrip()
+        plt.savefig(f"{filepath}/{sicherer_titel}.png")
+
+    if show:
+        plt.show()
+
+
+def oldplotshow(
+    datax,
+    datay,
+    title=None,
+    label=None,
+    grid=True,
+    xlabel=None,
+    ylabel=None,
+    filepath=None,
+    show=True,
 ):
     """
     Erstellt und zeigt einen einfachen Plot mit optionalen Konfigurationen.
@@ -85,11 +183,11 @@ def plotshow(
         plt.plot(datay, datax)
     if ylabel:
         plt.ylabel(ylabel)
-    elif xlabel:
+    if xlabel:
         plt.xlabel(xlabel)
 
     if filepath:
-        plt.savefig(filepath)
+        plt.savefig(filepath + f"/{title}")
     if show == True:
         plt.show()
 
@@ -299,9 +397,89 @@ def verweilzeitUmsatzmake(tau, k0, Ea, T, C_0i, ii):
 
 
 def molenmake(CA_0, CA_inf, W_0, W_inf, conductivity):
+    """
+    Berechnet die Konzentration einer Komponente zu verschiedenen Zeitpunkten anhand von Leitfähigkeitsmessungen.
 
+    Diese Funktion verwendet die gemessene Leitfähigkeit, um die Konzentration einer Komponente
+    (z.B. eines Reaktanten oder Produkts) zu berechnen. Die Umrechnung basiert auf einer linearen
+    Interpolation zwischen Anfangs- und Endwerten der Leitfähigkeit und Konzentration.
+
+    Args:
+        CA_0 (float): Anfangskonzentration der Komponente.
+        CA_inf (float): Endkonzentration der Komponente.
+        W_0 (float): Anfangswert der Leitfähigkeit.
+        W_inf (float): Endwert der Leitfähigkeit.
+        conductivity (list): Liste der gemessenen Leitfähigkeitswerte.
+
+    Returns:
+        list: Liste der berechneten Konzentrationen zu jedem Leitfähigkeitswert.
+    """
     CA_t = [
         (W - W_inf) / (W_0 - W_inf) * (CA_0 - CA_inf) + CA_inf for W in conductivity
     ]
 
     return CA_t
+
+
+def Leitfähigkeitsumsatzmake(CA_0, CA_inf, W_0, W_inf, conductivity):
+
+    CA_t = [
+        (W - W_inf) / (W_0 - W_inf) * (CA_0 - CA_inf) + CA_inf for W in conductivity
+    ]
+
+
+def Manuelleauswertung(E_t, t, mol_in, Volstrom, c_in, k0, Ea, T):
+    """
+    Führt die vollständige Auswertung der Verweilzeitdaten eines Rohreaktors durch.
+
+    Args:
+        E_t (list): Liste der E(t)-Werte (normierte Verweilzeitdichte).
+        t (list): Liste der Zeitpunkte t.
+        mol_in (float): Eingegebene Stoffmenge des Tracers (n₀).
+        Volstrom (float): Volumenstrom durch den Reaktor (V̇).
+
+    Returns:
+        dict: Ein Dictionary mit allen berechneten Kenngrößen.
+        "Mittlere Verweilzeit t_bar [min]": mü1,
+        "Zweites Moment M2 [min^2]": mü2,
+        "Varianz sigma^2 [min^2]": sigsq,
+        "Standardabweichung sigma [min]": sig,
+        "Dimensionslose Varianz sigma_theta^2": sigma_theta_sq,
+        "Dispersionszahl D/(uL)": D_uL,
+        "Effektives Reaktorvolumen V_eff [Einheit von Volstrom * s]": V_eff,
+        "Zeitachse t [min]": t,
+        "Konzentrationskurve c(t)": c_t,
+        "theoretischer Umsatz": f_i
+    """
+
+    # Annahme: nIntegration ist die Trapezregel, hier mit numpy implementiert
+    E_tn = E_t / nIntegration(t, E_t)
+    # Berechnung der Momente und Kennzahlen
+    mü1 = nIntegration(t, [a * b for a, b in zip(E_tn, t)])
+    mü2 = nIntegration(t, [a * (b**2) for a, b in zip(E_tn, t)])
+    sigsq = mü2 - mü1**2
+    sig = sigsq**0.5
+    sigma_theta_sq = sigsq / (mü1**2)
+    D_uL = (-2 + (4 + 32 * sigma_theta_sq) ** 0.5) / 16
+    V_eff = mü1 * Volstrom
+    c_t = [a * mol_in / Volstrom for a in E_tn]
+    R_0 = 8.314
+    k = k0 * (np.e) ** (-Ea / (R_0 * T))
+    f_i = (c_in * mü1 * 60 * k) / (1 + (c_in * mü1 * 60 * k))
+    # Ergebnisse in einem Dictionary sammeln
+    ergebnisse = {
+        "Mittlere Verweilzeit t_bar [min]": mü1,
+        "Zweites Moment M2 [min^2]": mü2,
+        "Varianz sigma^2 [min^2]": sigsq,
+        "Standardabweichung sigma [min]": sig,
+        "Dimensionslose Varianz sigma_theta^2": sigma_theta_sq,
+        "Dispersionszahl D/(uL)": D_uL,
+        "Effektives Reaktorvolumen V_eff [Einheit von Volstrom * s]": V_eff,
+        "Zeitachse t [min]": t,
+        "theoretischer Umsatz": f_i,
+        "Konzentrationskurve c(t)": list(c_t),
+    }
+
+    print_results_pretty(ergebnisse)
+
+
